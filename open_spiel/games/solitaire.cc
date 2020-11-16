@@ -1354,11 +1354,11 @@ std::vector<Action> SolitaireState::LegalActions() const {
       }
     }
 
+    legal_actions.push_back(kEnd);
     if (!legal_actions.empty()) {
       std::sort(legal_actions.begin(), legal_actions.end());
     }
 
-    legal_actions.push_back(kEnd);
     return legal_actions;
   }
 }
