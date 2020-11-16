@@ -38,9 +38,11 @@ namespace open_spiel::solitaire {
 
 // Default Game Parameters =====================================================
 
-inline constexpr int kDefaultPlayers = 1;
-inline constexpr int kDefaultDepthLimit = 150;
-inline constexpr bool kDefaultIsColored = false;
+inline constexpr bool   kDefaultIsColored            = false;
+inline constexpr int    kDefaultPlayers              = 1;
+inline constexpr int    kDefaultDepthLimit           = 150;
+inline constexpr int    kDefaultMovePenaltyThreshold = 100;
+inline constexpr double kDefaultMovePenalty          = -1.0;
 
 // Constants ===================================================================
 
@@ -165,6 +167,7 @@ class Pile {
   virtual void Reveal(Card card_to_reveal);
   void Extend(std::vector<Card> source_cards);
   std::string ToString(bool colored = true) const;
+  bool operator<(const Pile& other_pile) const;
 
  protected:
   std::vector<Card> cards_;
@@ -238,22 +241,25 @@ class SolitaireGame : public Game {
   explicit SolitaireGame(const GameParameters& params);
 
   // Overridden Methods
-  int NumDistinctActions() const override;
-  int MaxGameLength() const override;
-  // TODO: verify whether this bound is tight and/or tighten it.
-  int MaxChanceNodesInHistory() const override { return MaxGameLength(); }
-  int MaxChanceOutcomes() const override;
-  int NumPlayers() const override;
+  int    NumDistinctActions() const override;
+  int    MaxGameLength() const override;
+  int    MaxChanceNodesInHistory() const override { return MaxGameLength(); }
+  int    MaxChanceOutcomes() const override;
+  int    NumPlayers() const override;
   double MinUtility() const override;
   double MaxUtility() const override;
 
+  std::vector<int> InformationStateTensorShape() const override;
   std::vector<int> ObservationTensorShape() const override;
   std::unique_ptr<State> NewInitialState() const override;
 
  private:
-  int num_players_;
-  int depth_limit_;
-  bool is_colored_;
+  bool   is_colored_;
+  int    num_players_;
+  int    depth_limit_;
+  int    move_penalty_threshold_;
+  double move_penalty_;
+
 };
 
 class SolitaireState : public State {
@@ -262,42 +268,40 @@ class SolitaireState : public State {
   explicit SolitaireState(std::shared_ptr<const Game> game);
 
   // Overridden Methods
-  Player CurrentPlayer() const override;
+  Player                 CurrentPlayer() const override;
   std::unique_ptr<State> Clone() const override;
-  bool IsTerminal() const override;
-  bool IsChanceNode() const override;
-  std::string ToString() const override;
-  std::string ActionToString(Player player, Action action_id) const override;
-  std::string InformationStateString(Player player) const override;
-  std::string ObservationString(Player player) const override;
-  void ObservationTensor(Player player,
-                         absl::Span<float> values) const override;
-  void DoApplyAction(Action action) override;
-  std::vector<double> Returns() const override;
-  std::vector<double> Rewards() const override;
-  std::vector<Action> LegalActions() const override;
+  bool                   IsTerminal() const override;
+  bool                   IsChanceNode() const override;
+  std::string            ToString() const override;
+  std::string            ActionToString(Player player, Action action_id) const override;
+  std::string            InformationStateString(Player player) const override;
+  std::string            ObservationString(Player player) const override;
+  void                   ObservationTensor(Player player, absl::Span<float> values) const override;
+  void                   InformationStateTensor(Player player, absl::Span<float> values) const override;
+  void                   DoApplyAction(Action action) override;
+  std::vector<double>    Returns() const override;
+  std::vector<double>    Rewards() const override;
+  std::vector<Action>    LegalActions() const override;
   std::vector<std::pair<Action, double>> ChanceOutcomes() const override;
 
   // Other Methods
-  std::vector<Card> Targets(const absl::optional<LocationType>& location =
-                                LocationType::kMissing) const;
-  std::vector<Card> Sources(const absl::optional<LocationType>& location =
-                                LocationType::kMissing) const;
-  std::vector<Move> CandidateMoves() const;
-  Pile* GetPile(const Card& card);
-  const Pile* GetPile(const Card& card) const;
-  void MoveCards(const Move& move);
-  bool IsReversible(const Card& source, const Pile* source_pile) const;
+  std::vector<Card>    Targets(const absl::optional<LocationType>& location = LocationType::kMissing) const;
+  std::vector<Card>    Sources(const absl::optional<LocationType>& location = LocationType::kMissing) const;
+  std::vector<Move>    CandidateMoves() const;
+  Pile*                GetPile(const Card& card);
+  const Pile*          GetPile(const Card& card) const;
+  void                 MoveCards(const Move& move);
+  bool                 IsReversible(const Card& source, const Pile* source_pile) const;
 
- private:
-  Waste waste_;
+private:
+  Waste                   waste_;
   std::vector<Foundation> foundations_;
-  std::vector<Tableau> tableaus_;
-  std::vector<Action> revealed_cards_;
+  std::vector<Tableau>    tableaus_;
+  std::vector<Action>     revealed_cards_;
 
-  bool is_finished_ = false;
+  bool is_finished_   = false;
   bool is_reversible_ = false;
-  int current_depth_ = 0;
+  int  current_depth_ = 0;
 
   std::set<std::size_t> previous_states_ = {};
   std::map<Card, PileID> card_map_;
@@ -306,8 +310,13 @@ class SolitaireState : public State {
   double current_rewards_ = 0.0;
 
   // Parameters
-  int depth_limit_ = kDefaultDepthLimit;
-  bool is_colored_ = kDefaultIsColored;
+  int    depth_limit_            = kDefaultDepthLimit;
+  bool   is_colored_             = kDefaultIsColored;
+  int    move_penalty_threshold_ = kDefaultMovePenaltyThreshold;
+  double move_penalty_           = kDefaultMovePenalty;
+
+  // TODO: Remove this later
+  int num_penalties = 0;
 };
 
 }  // namespace open_spiel::solitaire

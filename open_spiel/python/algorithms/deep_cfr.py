@@ -34,6 +34,7 @@ import tensorflow.compat.v1 as tf
 
 from open_spiel.python import policy
 from open_spiel.python import simple_nets
+from colors import red, blue, green, yellow
 import pyspiel
 
 # Temporarily Disable TF2 behavior until we update the code.
@@ -266,9 +267,10 @@ class DeepCFRSolver(policy.Policy):
   def solve(self):
     """Solution logic for Deep CFR."""
     advantage_losses = collections.defaultdict(list)
-    for _ in range(self._num_iterations):
+    for i in range(self._num_iterations):
       for p in range(self._num_players):
-        for _ in range(self._num_traversals):
+        for t in range(self._num_traversals):
+          print(f'Iteration={i}, Traversal={t}')
           self._traverse_game_tree(self._root_node, p)
         if self._reinitialize_advantage_networks:
           # Re-initialize advantage network for player and train from scratch.
@@ -293,12 +295,15 @@ class DeepCFRSolver(policy.Policy):
     expected_payoff = collections.defaultdict(float)
     if state.is_terminal():
       # Terminal state get returns.
+      print(red('Terminal Node'))
       return state.returns()[player]
     elif state.is_chance_node():
       # If this is a chance node, sample an action
+      print(yellow('Chance Node'))
       action = np.random.choice([i[0] for i in state.chance_outcomes()])
       return self._traverse_game_tree(state.child(action), player)
     elif state.current_player() == player:
+      print(blue('Player Node'))
       sampled_regret = collections.defaultdict(float)
       # Update the policy over the info set & actions via regret matching.
       _, strategy = self._sample_action_from_advantage(state, player)
@@ -319,6 +324,7 @@ class DeepCFRSolver(policy.Policy):
                           sampled_regret_arr, action))
       return cfv
     else:
+      print(green('Other Node'))
       other_player = state.current_player()
       _, strategy = self._sample_action_from_advantage(state, other_player)
       # Recompute distribution dor numerical errors.

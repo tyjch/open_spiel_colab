@@ -35,9 +35,14 @@ const GameType kGameType{/*short_name=*/"solitaire",
                          /*provides_observation_string=*/true,
                          /*provides_observation_tensor=*/true,
                          /*parameter_specification=*/
-                         {{"players", GameParameter(kDefaultPlayers)},
-                          {"is_colored", GameParameter(kDefaultIsColored)},
-                          {"depth_limit", GameParameter(kDefaultDepthLimit)}}};
+                         {
+                             {"players", GameParameter(kDefaultPlayers)},
+                             {"is_colored", GameParameter(kDefaultIsColored)},
+                             {"depth_limit", GameParameter(kDefaultDepthLimit)},
+                             {"move_penalty", GameParameter(kDefaultMovePenalty)},
+                             {"move_penalty_threshold", GameParameter(kDefaultMovePenaltyThreshold)}
+                         }
+                         };
 
 std::shared_ptr<const Game> Factory(const GameParameters& params) {
   return std::shared_ptr<const Game>(new SolitaireGame(params));
@@ -49,100 +54,113 @@ REGISTER_SPIEL_GAME(kGameType, Factory)
 namespace {
 // ANSI color codes
 inline constexpr const char* kReset = "\033[0m";
-inline constexpr const char* kRed = "\033[31m";
+inline constexpr const char* kRed   = "\033[31m";
 inline constexpr const char* kBlack = "\033[37m";
 
 // Unicode Glyphs
-inline constexpr const char* kGlyphHidden = "\U0001F0A0";
-inline constexpr const char* kGlyphEmpty = "\U0001F0BF";
-inline constexpr const char* kGlyphSpades = "\U00002660";
-inline constexpr const char* kGlyphHearts = "\U00002665";
-inline constexpr const char* kGlyphClubs = "\U00002663";
+inline constexpr const char* kGlyphHidden   = "\U0001F0A0";
+inline constexpr const char* kGlyphEmpty    = "\U0001F0BF";
+inline constexpr const char* kGlyphSpades   = "\U00002660";
+inline constexpr const char* kGlyphHearts   = "\U00002665";
+inline constexpr const char* kGlyphClubs    = "\U00002663";
 inline constexpr const char* kGlyphDiamonds = "\U00002666";
-inline constexpr const char* kGlyphArrow = "\U00002190";
+inline constexpr const char* kGlyphArrow    = "\U00002190";
 
 // Constants ===================================================================
 inline constexpr int kNumRanks = 13;
 
-// Number of cards_ that can be in each pile type_
-inline constexpr int kMaxSizeWaste = 24;
+// Number of cards_ that can be in each pile type
+inline constexpr int kMaxSizeWaste      = 24;
 inline constexpr int kMaxSizeFoundation = 13;
-inline constexpr int kMaxSizeTableau = 19;
+inline constexpr int kMaxSizeTableau    = 19;
 
-// Number of sources that can be in each pile type_
-inline constexpr int kMaxSourcesWaste = 8;
+// Number of sources that can be in each pile type
+inline constexpr int kMaxSourcesWaste      = 8;
 inline constexpr int kMaxSourcesFoundation = 1;
-inline constexpr int kMaxSourcesTableau = 13;
+inline constexpr int kMaxSourcesTableau    = 13;
 
 // These divide up the action ids into sections. kEnd is a single action that is
 // used to end the game when no other actions are available.
 inline constexpr int kEnd = 0;
 
 // Reveal actions are ones that can be taken at chance nodes; they change a
-// hidden_ card to a card of the same index_ as the action id_ (e.g. 2 would
+// hidden card to a card of the same index as the action id (e.g. 2 would
 // reveal a 2 of spades)
 inline constexpr int kRevealStart = 1;
-inline constexpr int kRevealEnd = 52;
+inline constexpr int kRevealEnd   = 52;
 
 // kMove actions are ones that are taken at decision nodes; they involve moving
-// a card to another cards_ location_. It starts at 53 because there are 52
+// a card to another cards location. It starts at 53 because there are 52
 // reveal actions before it. See `NumDistinctActions()` in solitaire.cc.
 inline constexpr int kMoveStart = 53;
-inline constexpr int kMoveEnd = 204;
+inline constexpr int kMoveEnd   = 204;
 
-// Indices for special cards_
+// Indices for special cards
 // inline constexpr int kHiddenCard = 99;
-inline constexpr int kEmptySpadeCard = -5;
-inline constexpr int kEmptyHeartCard = -4;
-inline constexpr int kEmptyClubCard = -3;
+inline constexpr int kEmptySpadeCard   = -5;
+inline constexpr int kEmptyHeartCard   = -4;
+inline constexpr int kEmptyClubCard    = -3;
 inline constexpr int kEmptyDiamondCard = -2;
 inline constexpr int kEmptyTableauCard = -1;
 
 // 1 empty + 13 ranks
 inline constexpr int kFoundationTensorLength = 14;
 
-// 6 hidden_ cards_ + 1 empty tableau + 52 ordinary cards_
+// 6 hidden cards + 1 empty tableau + 52 ordinary cards
 inline constexpr int kTableauTensorLength = 59;
 
-// 1 hidden_ card + 52 ordinary cards_
+// 1 hidden card + 52 ordinary cards
 inline constexpr int kWasteTensorLength = 53;
 
-// Constant for how many hidden_ cards_ can show up in a tableau. As hidden_
-// cards_ can't be added, the max is the highest number in a tableau at the
+// Constant for how many hidden cards can show up in a tableau. As hidden
+// cards can't be added, the max is the highest number in a tableau at the
 // start of the game: 6
 inline constexpr int kMaxHiddenCard = 6;
 
-// Only used in one place and just for consistency (to match kChancePlayerId&
+// Only used in one place and just for consistency (to match kChancePlayerId &
 // kTerminalPlayerId)
 inline constexpr int kPlayerId = 0;
 
-// Indicates the last index_ before the first player action (the last Reveal
+// Indicates the last index before the first player action (the last Reveal
 // action has an ID of 52)
 inline constexpr int kActionOffset = 52;
 
 // Order of suits
-const std::vector<SuitType> kSuits = {SuitType::kSpades, SuitType::kHearts,
-                                      SuitType::kClubs, SuitType::kDiamonds};
+const std::vector<SuitType> kSuits = {
+    SuitType::kSpades,
+    SuitType::kHearts,
+    SuitType::kClubs,
+    SuitType::kDiamonds
+};
 
 // These correspond with their enums, not with the two vectors directly above
 const std::vector<std::string> kSuitStrs = {
-    "", kGlyphSpades, kGlyphHearts, kGlyphClubs, kGlyphDiamonds, ""};
+    "", kGlyphSpades, kGlyphHearts, kGlyphClubs, kGlyphDiamonds,""
+};
 const std::vector<std::string> kRankStrs = {
-    "", "A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", ""};
+    "", "A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", ""
+};
 
 const std::map<RankType, double> kFoundationPoints = {
-    // region Maps a RankType to the reward for moving a card of that rank_ to
-    // the foundation
-    {RankType::kA, 100.0}, {RankType::k2, 90.0}, {RankType::k3, 80.0},
-    {RankType::k4, 70.0},  {RankType::k5, 60.0}, {RankType::k6, 50.0},
-    {RankType::k7, 40.0},  {RankType::k8, 30.0}, {RankType::k9, 20.0},
-    {RankType::kT, 10.0},  {RankType::kJ, 10.0}, {RankType::kQ, 10.0},
+    // region Maps a RankType to the reward for moving a card of that rank to the foundation
+    {RankType::kA, 100.0},
+    {RankType::k2, 90.0},
+    {RankType::k3, 80.0},
+    {RankType::k4, 70.0},
+    {RankType::k5, 60.0},
+    {RankType::k6, 50.0},
+    {RankType::k7, 40.0},
+    {RankType::k8, 30.0},
+    {RankType::k9, 20.0},
+    {RankType::kT, 10.0},
+    {RankType::kJ, 10.0},
+    {RankType::kQ, 10.0},
     {RankType::kK, 10.0}
     // endregion
 };
 
 const std::map<SuitType, PileID> kSuitToPile = {
-    // region Maps a foundation suit_ to the ID of the foundation
+    // region Maps a foundation suit to the ID of the foundation
     {SuitType::kSpades, PileID::kSpades},
     {SuitType::kHearts, PileID::kHearts},
     {SuitType::kClubs, PileID::kClubs},
@@ -151,18 +169,20 @@ const std::map<SuitType, PileID> kSuitToPile = {
 };
 
 const std::map<int, PileID> kIntToPile = {
-    // region Maps an integer to a tableau pile ID (used when initializing
-    // SolitaireState)
-    {1, PileID::k1stTableau}, {2, PileID::k2ndTableau},
-    {3, PileID::k3rdTableau}, {4, PileID::k4thTableau},
-    {5, PileID::k5thTableau}, {6, PileID::k6thTableau},
+    // region Maps an integer to a tableau pile ID (used when initializing SolitaireState)
+    {1, PileID::k1stTableau},
+    {2, PileID::k2ndTableau},
+    {3, PileID::k3rdTableau},
+    {4, PileID::k4thTableau},
+    {5, PileID::k5thTableau},
+    {6, PileID::k6thTableau},
     {7, PileID::k7thTableau}
     // endregion
 };
 
 }  // namespace
 
-// Miscellaneous ===============================================================
+// region Miscellaneous ==================================================================
 
 std::vector<SuitType> GetOppositeSuits(const SuitType& suit) {
   /* Just returns a vector of the suits of opposite color. For red suits
@@ -188,8 +208,7 @@ std::vector<SuitType> GetOppositeSuits(const SuitType& suit) {
       return {SuitType::kSpades, SuitType::kClubs};
     }
     case SuitType::kNone: {
-      return {SuitType::kSpades, SuitType::kHearts, SuitType::kClubs,
-              SuitType::kDiamonds};
+      return {SuitType::kSpades, SuitType::kHearts, SuitType::kClubs, SuitType::kDiamonds};
     }
     default: {
       SpielFatalError("suit is not in (s, h, c, d)");
@@ -202,12 +221,12 @@ int GetCardIndex(RankType rank, SuitType suit) {
    * of the card. */
 
   if (rank == RankType::kHidden || suit == SuitType::kHidden) {
-    // Handles hidden_ cards_
+    // Handles hidden cards
     return kHiddenCard;
   } else if (rank == RankType::kNone) {
-    // Handles special cards_
+    // Handles special cards
     if (suit == SuitType::kNone) {
-      // Handles empty tableau cards_
+      // Handles empty tableau cards
       return kEmptyTableauCard;
     } else {
       // Handles empty foundation cards
@@ -225,7 +244,7 @@ int GetCardIndex(RankType rank, SuitType suit) {
           return kEmptyDiamondCard;
         }
         default: {
-          SpielFatalError("Failed to get card index_");
+          SpielFatalError("Failed to get card index");
         }
       }
     }
@@ -238,12 +257,12 @@ int GetCardIndex(RankType rank, SuitType suit) {
 int GetMaxSize(LocationType location) {
   switch (location) {
     case LocationType::kDeck... LocationType::kWaste: {
-      // Cards can only be removed from the waste_&  there are 24 cards_ in it
+      // Cards can only be removed from the waste & there are 24 cards in it
       // at the start of the game
       return kMaxSizeWaste;
     }
     case LocationType::kFoundation: {
-      // There are 13 cards_ in a suit_
+      // There are 13 cards in a suit
       return kMaxSizeFoundation;
     }
     case LocationType::kTableau: {
@@ -259,7 +278,9 @@ int GetMaxSize(LocationType location) {
 
 std::hash<std::string> hasher;
 
-// Card Methods ================================================================
+// endregion
+
+// region Card Methods ===================================================================
 
 Card::Card(bool hidden, SuitType suit, RankType rank, LocationType location)
     : rank_(rank), suit_(suit), location_(location), hidden_(hidden) {}
@@ -301,22 +322,29 @@ Card::Card(int index, bool hidden, LocationType location)
       default: {
         // Converts an index back into a rank and suit for ordinary cards
         rank_ = static_cast<RankType>(1 + ((index_ - 1) % kNumRanks));
-        suit_ = static_cast<SuitType>(
-            static_cast<int>(1 + floor((index_ - 1) / 13.0)));
+        suit_ = static_cast<SuitType>(static_cast<int>(1 + floor((index_ - 1) / 13.0)));
       }
     }
   }
 }
 
-// Getters
+// region Getters
 
-RankType Card::GetRank() const { return rank_; }
+RankType Card::GetRank() const {
+  return rank_;
+}
 
-SuitType Card::GetSuit() const { return suit_; }
+SuitType Card::GetSuit() const {
+  return suit_;
+}
 
-LocationType Card::GetLocation() const { return location_; }
+LocationType Card::GetLocation() const {
+  return location_;
+}
 
-bool Card::GetHidden() const { return hidden_; }
+bool Card::GetHidden() const {
+  return hidden_;
+}
 
 int Card::GetIndex() const {
   /* Basically it just calculates the index if it hasn't been calculated before,
@@ -325,17 +353,29 @@ int Card::GetIndex() const {
   return hidden_ ? kHiddenCard : GetCardIndex(rank_, suit_);
 }
 
-// Setters
+// endregion
 
-void Card::SetRank(RankType new_rank) { rank_ = new_rank; }
+// region Setters
 
-void Card::SetSuit(SuitType new_suit) { suit_ = new_suit; }
+void Card::SetRank(RankType new_rank) {
+  rank_ = new_rank;
+}
 
-void Card::SetLocation(LocationType new_location) { location_ = new_location; }
+void Card::SetSuit(SuitType new_suit) {
+  suit_ = new_suit;
+}
 
-void Card::SetHidden(bool new_hidden) { hidden_ = new_hidden; }
+void Card::SetLocation(LocationType new_location) {
+  location_ = new_location;
+}
 
-// Other Methods
+void Card::SetHidden(bool new_hidden) {
+  hidden_ = new_hidden;
+}
+
+// endregion
+
+// region Other Methods
 
 std::string Card::ToString(bool colored) const {
   std::string result;
@@ -431,7 +471,7 @@ std::vector<Card> Card::LegalChildren() const {
         break;
       }
       default: {
-        // This catches all cards_ that aren't located in a tableau or
+        // This catches all cards that aren't located in a tableau or
         // foundation
         return {};
       }
@@ -467,34 +507,54 @@ bool Card::operator<(const Card& other_card) const {
   }
 }
 
-// Pile Methods ================================================================
+// endregion
+
+// endregion
+
+// region Pile Methods ===================================================================
 
 Pile::Pile(LocationType type, PileID id, SuitType suit)
     : type_(type), suit_(suit), id_(id), max_size_(GetMaxSize(type)) {
   cards_.reserve(max_size_);
 }
 
-// Getters/Setters
+// region Getters/Setters
 
-bool Pile::GetIsEmpty() const { return cards_.empty(); }
+bool Pile::GetIsEmpty() const {
+  return cards_.empty();
+}
 
-Card Pile::GetFirstCard() const { return cards_.front(); }
+Card Pile::GetFirstCard() const {
+  return cards_.front();
+}
 
-Card Pile::GetLastCard() const { return cards_.back(); }
+Card Pile::GetLastCard() const {
+  return cards_.back();
+}
 
-SuitType Pile::GetSuit() const { return suit_; }
+SuitType Pile::GetSuit() const {
+  return suit_;
+}
 
-LocationType Pile::GetType() const { return type_; }
+LocationType Pile::GetType() const {
+  return type_;
+}
 
-PileID Pile::GetID() const { return id_; }
+PileID Pile::GetID() const {
+  return id_;
+}
 
-std::vector<Card> Pile::GetCards() const { return cards_; }
+std::vector<Card> Pile::GetCards() const {
+  return cards_;
+}
 
 void Pile::SetCards(std::vector<Card> new_cards) {
   cards_ = std::move(new_cards);
 }
 
-// Other Methods
+// endregion
+
+// region Other Methods
 
 std::vector<Card> Pile::Targets() const {
   std::cout << "Pile::Targets()" << std::endl;
@@ -517,12 +577,11 @@ std::vector<Card> Pile::Targets() const {
         }
       } else {
         // Empty tableau card (no rank or suit)
-        return {Card(false, SuitType::kNone, RankType::kNone,
-                     LocationType::kTableau)};
+        return {Card(false, SuitType::kNone, RankType::kNone,LocationType::kTableau)};
       }
     }
     default: {
-      SpielFatalError("Pile::Targets() called with unsupported type_");
+      SpielFatalError("Pile::Targets() called with unsupported type");
     }
   }
 }
@@ -643,7 +702,15 @@ std::string Pile::ToString(bool colored) const {
   return result;
 }
 
-// Tableau Methods =============================================================
+bool Pile::operator<(const Pile &other_pile) const {
+  return GetCards() < other_pile.GetCards();
+}
+
+// endregion
+
+// endregion
+
+// region Tableau Methods ================================================================
 
 Tableau::Tableau(PileID id)
     : Pile(LocationType::kTableau, id, SuitType::kNone) {}
@@ -703,7 +770,9 @@ void Tableau::Reveal(Card card_to_reveal) {
   cards_.back().SetHidden(false);
 }
 
-// Foundation Methods ==========================================================
+// endregion
+
+// region Foundation Methods =============================================================
 
 Foundation::Foundation(PileID id, SuitType suit)
     : Pile(LocationType::kFoundation, id, suit) {}
@@ -736,7 +805,9 @@ std::vector<Card> Foundation::Split(Card card) {
   return split_cards;
 }
 
-// Waste Methods ===============================================================
+// endregion
+
+// region Waste Methods ==================================================================
 
 Waste::Waste() : Pile(LocationType::kWaste, PileID::kWaste, SuitType::kNone) {}
 
@@ -791,7 +862,9 @@ void Waste::Reveal(Card card_to_reveal) {
   }
 }
 
-// Move Methods ================================================================
+// endregion
+
+// region Move Methods ===================================================================
 
 Move::Move(Card target_card, Card source_card) {
   target_ = target_card;
@@ -885,13 +958,15 @@ Move::Move(Action action) {
                  static_cast<RankType>(source_rank));
 }
 
-// Getters
+// region Getters
 
 Card Move::GetTarget() const { return target_; }
 
 Card Move::GetSource() const { return source_; }
 
-// Other Methods
+// endregion
+
+// region Other Methods
 
 Action Move::ActionId() const {
   int target_rank = static_cast<int>(target_.GetRank());
@@ -966,14 +1041,20 @@ bool Move::operator<(const Move& other_move) const {
   return index_ < other_index;
 }
 
-// SolitaireState Methods ======================================================
+// endregion
+
+// endregion
+
+// region SolitaireState Methods =========================================================
 
 SolitaireState::SolitaireState(std::shared_ptr<const Game> game)
     : State(game), waste_() {
   // Extract parameters from `game`
   auto parameters = game->GetParameters();
-  is_colored_ = parameters.at("is_colored").bool_value();
-  depth_limit_ = parameters.at("depth_limit").int_value();
+  is_colored_             = parameters.at("is_colored").bool_value();
+  depth_limit_            = parameters.at("depth_limit").int_value();
+  move_penalty_threshold_ = parameters.at("move_penalty_threshold").int_value();
+  move_penalty_           = parameters.at("move_penalty").double_value();
 
   // Create foundations_
   for (const auto& suit_ : kSuits) {
@@ -1067,11 +1148,15 @@ std::string SolitaireState::ToString() const {
     absl::StrAppend(&result, card.ToString(is_colored_), " ");
   }
 
+  absl::StrAppend(&result, "\nLEGAL ACTIONS:");
+  for (const auto& action : LegalActions()) {
+    absl::StrAppend(&result, "\n", ActionToString(CurrentPlayer(), action));
+  }
+
   return result;
 }
 
-std::string SolitaireState::ActionToString(Player player,
-                                           Action action_id) const {
+std::string SolitaireState::ActionToString(Player player, Action action_id) const {
   switch (action_id) {
     case kEnd: {
       return "kEnd";
@@ -1104,12 +1189,11 @@ std::string SolitaireState::ObservationString(Player player) const {
   return ToString();
 }
 
-void SolitaireState::ObservationTensor(Player player,
-                                       absl::Span<float> values) const {
+void SolitaireState::ObservationTensor(Player player, absl::Span<float> values) const {
   SPIEL_CHECK_GE(player, 0);
   SPIEL_CHECK_LT(player, num_players_);
-
   SPIEL_CHECK_EQ(values.size(), game_->ObservationTensorSize());
+
   std::fill(values.begin(), values.end(), 0.0);
   auto ptr = values.begin();
 
@@ -1156,6 +1240,21 @@ void SolitaireState::ObservationTensor(Player player,
   SPIEL_CHECK_LE(ptr, values.end());
 }
 
+void SolitaireState::InformationStateTensor(Player player, absl::Span<float> values) const {
+  SPIEL_CHECK_GE(player, 0);
+  SPIEL_CHECK_LT(player, num_players_);
+
+  std::fill(values.begin(), values.end(), kInvalidAction);
+  auto ptr = values.begin();
+
+  for (const auto& action : History()) {
+    ptr[0] = action;
+    ptr += 1;
+  }
+
+  SPIEL_CHECK_LE(ptr, values.end());
+}
+
 void SolitaireState::DoApplyAction(Action action) {
   switch (action) {
     case kEnd: {
@@ -1184,8 +1283,7 @@ void SolitaireState::DoApplyAction(Action action) {
     }
     case kMoveStart ... kMoveEnd: {
       Move selected_move = Move(action);
-      is_reversible_ = IsReversible(selected_move.GetSource(),
-                                    GetPile(selected_move.GetSource()));
+      is_reversible_ = IsReversible(selected_move.GetSource(),GetPile(selected_move.GetSource()));
 
       if (is_reversible_) {
         std::string current_observation = ObservationString(0);
@@ -1206,6 +1304,7 @@ void SolitaireState::DoApplyAction(Action action) {
   if (current_depth_ >= depth_limit_) {
     is_finished_ = true;
   }
+
 }
 
 std::vector<double> SolitaireState::Returns() const {
@@ -1257,10 +1356,9 @@ std::vector<Action> SolitaireState::LegalActions() const {
 
     if (!legal_actions.empty()) {
       std::sort(legal_actions.begin(), legal_actions.end());
-    } else {
-      legal_actions.push_back(kEnd);
     }
 
+    legal_actions.push_back(kEnd);
     return legal_actions;
   }
 }
@@ -1279,7 +1377,7 @@ std::vector<std::pair<Action, double>> SolitaireState::ChanceOutcomes() const {
   return outcomes;
 }
 
-// Other Methods
+// region Other Methods
 
 std::vector<Card> SolitaireState::Targets(
     const absl::optional<LocationType>& location) const {
@@ -1305,8 +1403,7 @@ std::vector<Card> SolitaireState::Targets(
   return targets;
 }
 
-std::vector<Card> SolitaireState::Sources(
-    const absl::optional<LocationType>& location) const {
+std::vector<Card> SolitaireState::Sources(const absl::optional<LocationType>& location) const {
   LocationType loc = location.value_or(LocationType::kMissing);
   std::vector<Card> sources;
 
@@ -1483,8 +1580,7 @@ void SolitaireState::MoveCards(const Move& move) {
   }
 
   // Reward for revealing a hidden_ card
-  if (source_pile->GetType() == LocationType::kTableau &&
-      !source_pile->GetIsEmpty() && source_pile->GetLastCard().GetHidden()) {
+  if (source_pile->GetType() == LocationType::kTableau && !source_pile->GetIsEmpty() && source_pile->GetLastCard().GetHidden()) {
     move_reward += 20.0;
   }
 
@@ -1493,12 +1589,17 @@ void SolitaireState::MoveCards(const Move& move) {
     move_reward += 20.0;
   }
 
+  // Calculate penalty if depth exceeds move threshold
+  if (current_depth_ >= move_penalty_threshold_) {
+    move_reward += move_penalty_;
+    num_penalties += 1;
+  }
+
   // Add current rewards to current returns
   current_rewards_ = move_reward;
 }
 
-bool SolitaireState::IsReversible(const Card& source,
-                                  const Pile* source_pile) const {
+bool SolitaireState::IsReversible(const Card& source, const Pile* source_pile) const {
   switch (source.GetLocation()) {
     case LocationType::kWaste: {
       return false;
@@ -1523,13 +1624,19 @@ bool SolitaireState::IsReversible(const Card& source,
   }
 }
 
-// SolitaireGame Methods =======================================================
+// endregion
+
+// endregion
+
+// region SolitaireGame Methods ==========================================================
 
 SolitaireGame::SolitaireGame(const GameParameters& params)
     : Game(kGameType, params),
       num_players_(ParameterValue<int>("players")),
       depth_limit_(ParameterValue<int>("depth_limit")),
-      is_colored_(ParameterValue<bool>("is_colored")) {}
+      is_colored_(ParameterValue<bool>("is_colored")),
+      move_penalty_threshold_(ParameterValue<int>("move_penalty_threshold")),
+      move_penalty_(ParameterValue<double>("move_penalty")) {}
 
 int SolitaireGame::NumDistinctActions() const {
   /* 52 Reveal Moves (one for each ordinary card)
@@ -1540,47 +1647,64 @@ int SolitaireGame::NumDistinctActions() const {
   return 205;
 }
 
-int SolitaireGame::MaxChanceOutcomes() const { return kRevealEnd + 1; }
+int SolitaireGame::MaxChanceOutcomes() const {
+  return kRevealEnd + 1;
+}
 
-int SolitaireGame::MaxGameLength() const { return depth_limit_; }
+int SolitaireGame::MaxGameLength() const {
+  return depth_limit_;
+}
 
-int SolitaireGame::NumPlayers() const { return 1; }
+int SolitaireGame::NumPlayers() const {
+  return 1;
+}
 
 double SolitaireGame::MinUtility() const {
   /* Returns start at zero and the only negative rewards come from undoing an
    * action. Undoing an action just takes away the reward that was gained from
-   * the action, so utility can never go below 0. */
-  return 0.0;
+   * the action, so utility can never go below 0. With a move penalty, moves
+   * at the threshold and beyond can make it go lower than 0.
+   */
+  return std::min(0.0, (depth_limit_ - move_penalty_threshold_) * move_penalty_);
 }
 
 double SolitaireGame::MaxUtility() const {
-  /* Waste (24 * 20 = 480)
-     24 cards are in the waste initially. 20 points are rewarded for every one
-     that is moved from the waste. Tableau (21 * 20 = 420) 21 cards are
-     hidden_ in the tableaus_ initially. 20 points are rewarded for every one
-     that is revealed. Foundation (4 * (100 + 90 + 80 + 70 + 60 + 50 + 40 + 30 +
-     20 + 10
-     + 10 + 10 + 10) = 4 * 580 = 2,320) 0 cards are in the foundations
-     initially. A varying number of points, based on the cards rank, are
-     awarded when the card is moved to the foundation. Each complete suit in
-     the foundation is worth 580 points. `kFoundationPoints` in `solitaire.h`
-     outlines how much each rank is worth. */
+  /*
+     Waste (24 * 20 = 480)
+        24 cards are in the waste initially. 20 points are rewarded for every one
+        that is moved from the waste. Tableau (21 * 20 = 420) 21 cards are
+        hidden_ in the tableaus initially. 20 points are rewarded for every one
+        that is revealed.
+     Foundation (4 * (100 + 90 + 80 + 70 + 60 + 50 + 40 + 30 +20 + 10 + 10 + 10 + 10) = 4 * 580 = 2,320)
+        0 cards are in the foundations initially. A varying number of points,
+        based on the cards rank, are awarded when the card is moved to the
+        foundation. Each complete suit in the foundation is worth 580 points.
+        `kFoundationPoints` in `solitaire.h` outlines how much each rank is worth.
+  */
   return 3220.0;
 }
 
 std::vector<int> SolitaireGame::ObservationTensorShape() const {
-  /* Waste (24 * 53 = 1,272)
-       24 locations and each location_ is a 53 element vector (52 normal cards
-    + 1 hidden) Tableau (7 * 59 = 413) Each tableau is represented as a 59
-    element vector (6 hidden_ cards + 1 empty tableau + 52 normal cards_)
-    Foundation (4 * 14 = 56) Each foundation is represented as a 14 element
-    vector (13 ranks + 1 empty foundation) Total Length = 1,272 + 413 + 56 =
-    1,741 */
+  /*
+    Waste (24 * 53 = 1,272)
+      24 locations and each location_ is a 53 element vector (52 normal cards + 1 hidden)
+    Tableau (7 * 59 = 413)
+      Each tableau is represented as a 59 element vector (6 hidden cards + 1 empty tableau + 52 normal cards)
+    Foundation (4 * 14 = 56)
+      Each foundation is represented as a 14 element vector (13 ranks + 1 empty foundation)
+    Total Length = 1,272 + 413 + 56 = 1,741
+  */
   return {1741};
+}
+
+std::vector<int> SolitaireGame::InformationStateTensorShape() const {
+  return {depth_limit_};
 }
 
 std::unique_ptr<State> SolitaireGame::NewInitialState() const {
   return std::unique_ptr<State>(new SolitaireState(shared_from_this()));
 }
+
+// endregion
 
 }  // namespace open_spiel::solitaire
