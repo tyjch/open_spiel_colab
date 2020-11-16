@@ -295,15 +295,15 @@ class DeepCFRSolver(policy.Policy):
     expected_payoff = collections.defaultdict(float)
     if state.is_terminal():
       # Terminal state get returns.
-      print(red('Terminal Node'))
+      # print(red('Terminal Node'))
       return state.returns()[player]
     elif state.is_chance_node():
       # If this is a chance node, sample an action
-      print(yellow('Chance Node'))
+      # print(yellow('Chance Node'))
       action = np.random.choice([i[0] for i in state.chance_outcomes()])
       return self._traverse_game_tree(state.child(action), player)
     elif state.current_player() == player:
-      print(blue('Player Node'))
+      # print(blue('Player Node'))
       sampled_regret = collections.defaultdict(float)
       # Update the policy over the info set & actions via regret matching.
       _, strategy = self._sample_action_from_advantage(state, player)
@@ -324,7 +324,7 @@ class DeepCFRSolver(policy.Policy):
                           sampled_regret_arr, action))
       return cfv
     else:
-      print(green('Other Node'))
+      # print(green('Other Node'))
       other_player = state.current_player()
       _, strategy = self._sample_action_from_advantage(state, other_player)
       # Recompute distribution dor numerical errors.
