@@ -78,19 +78,19 @@ enum class RankType {
 };
 
 enum class LocationType {
-  kDeck = 0,
-  kWaste = 1,
+  kDeck       = 0,
+  kWaste      = 1,
   kFoundation = 2,
-  kTableau = 3,
-  kMissing = 4,
+  kTableau    = 3,
+  kMissing    = 4,
 };
 
 enum class PileID {
-  kWaste = 0,
-  kSpades = 1,
-  kHearts = 2,
-  kClubs = 3,
-  kDiamonds = 4,
+  kWaste      = 0,
+  kSpades     = 1,
+  kHearts     = 2,
+  kClubs      = 3,
+  kDiamonds   = 4,
   k1stTableau = 5,
   k2ndTableau = 6,
   k3rdTableau = 7,
@@ -98,7 +98,7 @@ enum class PileID {
   k5thTableau = 9,
   k6thTableau = 10,
   k7thTableau = 11,
-  kMissing = 12
+  kMissing    = 12
 };
 
 // Support Classes =============================================================
@@ -106,18 +106,20 @@ enum class PileID {
 class Card {
  public:
   // Constructors
-  explicit Card(bool hidden = false, SuitType suit = SuitType::kHidden,
-                RankType rank = RankType::kHidden,
-                LocationType location = LocationType::kMissing);
-  explicit Card(int index, bool hidden = false,
+  explicit Card(bool hidden = false,
+                 SuitType suit = SuitType::kHidden,
+                 RankType rank = RankType::kHidden,
+                 LocationType location = LocationType::kMissing);
+  explicit Card(int index,
+                bool hidden = false,
                 LocationType location = LocationType::kMissing);
 
   // Getters
-  RankType GetRank() const;
-  SuitType GetSuit() const;
+  RankType     GetRank() const;
+  SuitType     GetSuit() const;
   LocationType GetLocation() const;
-  bool GetHidden() const;
-  int GetIndex() const;
+  bool         GetHidden() const;
+  int          GetIndex() const;
 
   // Setters
   void SetRank(RankType new_rank);
@@ -130,16 +132,15 @@ class Card {
   bool operator<(const Card& other_card) const;
 
   // Other Methods
-  std::string ToString(bool colored = true) const;
+  std::string       ToString(bool colored = true) const;
   std::vector<Card> LegalChildren() const;
 
  private:
-  RankType rank_ = RankType::kHidden;  // Indicates the rank of the card
-  SuitType suit_ = SuitType::kHidden;  // Indicates the suit of the card
-  LocationType location_ =
-      LocationType::kMissing;  // Indicates the type of pile the card is in
-  bool hidden_ = false;        // Indicates whether the card is hidden or not
-  int index_ = kHiddenCard;    // Identifies the card with an integer
+  RankType     rank_     = RankType::kHidden;       // Indicates the rank of the card
+  SuitType     suit_     = SuitType::kHidden;       // Indicates the suit of the card
+  LocationType location_ = LocationType::kMissing;  // Indicates the type of pile the card is in
+  bool         hidden_   = false;                   // Indicates whether the card is hidden or not
+  int          index_    = kHiddenCard;             // Identifies the card with an integer
 };
 
 class Pile {
